@@ -1,0 +1,275 @@
+<div class="h-screen flex flex-col bg-slate-50 overflow-hidden font-sans">
+  <!-- Global Request Progress Bar -->
+  @if (loading.isLoading()) {
+    <mat-progress-bar mode="indeterminate" class="absolute top-0 left-0 right-0 z-50 h-1"></mat-progress-bar>
+  }
+
+  <!-- TOP TOOLBAR -->
+  <mat-toolbar class="!bg-white !border-b !border-slate-200/80 !h-16 !px-4 sm:!px-6 !shadow-2xs z-30 flex items-center justify-between">
+    <!-- Left: Hamburger & Brand -->
+    <div class="flex items-center gap-3">
+      <button
+        mat-icon-button
+        (click)="toggleSidenav()"
+        class="text-slate-600 hover:text-indigo-600"
+        aria-label="Alternar menú lateral"
+      >
+        <mat-icon>menu</mat-icon>
+      </button>
+
+      <a routerLink="/products" class="flex items-center gap-2.5 group">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform">
+          <mat-icon class="text-xl">storefront</mat-icon>
+        </div>
+        <div class="flex flex-col">
+          <span class="font-extrabold text-lg text-slate-900 tracking-tight leading-tight">
+            Mi Tienda
+          </span>
+          <span class="text-[10px] font-bold text-indigo-600 tracking-wider uppercase">
+            Arquitectura FEAN
+          </span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Center: Demo Role Quick Switcher Pills -->
+    <div class="hidden md:flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200">
+      <span class="text-[11px] font-bold text-slate-400 px-2 uppercase tracking-wider">Rol:</span>
+      <button
+        type="button"
+        (click)="switchToRole('ADMIN')"
+        class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+        [class]="auth.isAdmin() ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+      >
+        👑 Admin
+      </button>
+      <button
+        type="button"
+        (click)="switchToRole('MANAGER')"
+        class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+        [class]="auth.userRole() === 'MANAGER' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+      >
+        💼 Manager
+      </button>
+      <button
+        type="button"
+        (click)="switchToRole('CUSTOMER')"
+        class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+        [class]="auth.isCustomer() ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+      >
+        🛍️ Cliente
+      </button>
+    </div>
+
+    <!-- Right Actions: Architecture, Cart & User Menu -->
+    <div class="flex items-center gap-2">
+      <!-- Architecture Doc Shortcut -->
+      <a
+        routerLink="/architecture"
+        mat-button
+        class="!hidden sm:!inline-flex !rounded-xl !text-xs !font-semibold !text-indigo-600 !border !border-indigo-100 hover:!bg-indigo-50"
+      >
+        <mat-icon class="text-sm mr-1">schema</mat-icon>
+        Capas FEAN
+      </a>
+
+      <!-- Cart Drawer Trigger Button with Badge -->
+      <button
+        type="button"
+        mat-icon-button
+        (click)="cart.toggleDrawer()"
+        class="relative text-slate-700 hover:text-indigo-600 hover:bg-slate-100"
+        aria-label="Abrir carrito"
+      >
+        <mat-icon
+          [matBadge]="cart.totalItems()"
+          [matBadgeHidden]="cart.totalItems() === 0"
+          matBadgeColor="warn"
+          matBadgeSize="small"
+        >
+          shopping_bag
+        </mat-icon>
+      </button>
+
+      <!-- User Profile Menu -->
+      @if (auth.isAuthenticated()) {
+        <button
+          mat-button
+          [matMenuTriggerFor]="userMenu"
+          class="!flex !items-center !gap-2 !p-1.5 !rounded-xl hover:!bg-slate-100 !text-slate-700"
+        >
+          <img
+            [src]="auth.currentUser()?.avatarUrl || 'https://api.dicebear.com/7.x/initials/svg?seed=' + auth.currentUser()?.name"
+            [alt]="auth.currentUser()?.name"
+            referrerpolicy="no-referrer"
+            class="w-8 h-8 rounded-full border border-slate-200 object-cover bg-slate-100 shrink-0"
+          />
+          <div class="hidden lg:flex flex-col text-left">
+            <span class="text-xs font-bold text-slate-900 leading-tight">
+              {{ auth.currentUser()?.name }}
+            </span>
+            <span class="text-[10px] text-slate-500 font-semibold uppercase">
+              {{ auth.userRole() }}
+            </span>
+          </div>
+          <mat-icon class="text-slate-400 text-sm">expand_more</mat-icon>
+        </button>
+
+        <mat-menu #userMenu="matMenu" class="rounded-2xl shadow-xl border border-slate-100">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <p class="text-xs text-slate-400 font-medium">Sesión activa</p>
+            <p class="text-sm font-bold text-slate-900">{{ auth.currentUser()?.name }}</p>
+            <p class="text-xs text-slate-500">{{ auth.currentUser()?.email }}</p>
+          </div>
+
+          <a routerLink="/orders" mat-menu-item>
+            <mat-icon class="text-slate-500">receipt_long</mat-icon>
+            <span>Mis Pedidos</span>
+          </a>
+
+          @if (auth.isAdmin() || auth.isManager()) {
+            <a routerLink="/dashboard" mat-menu-item>
+              <mat-icon class="text-slate-500">dashboard</mat-icon>
+              <span>Panel de Control</span>
+            </a>
+          }
+
+          <mat-divider></mat-divider>
+
+          <button mat-menu-item (click)="auth.logout()">
+            <mat-icon class="text-rose-500">logout</mat-icon>
+            <span class="text-rose-600 font-semibold">Cerrar Sesión</span>
+          </button>
+        </mat-menu>
+      } @else {
+        <a routerLink="/auth/login" mat-flat-button color="primary" class="rounded-xl text-xs font-semibold">
+          Iniciar Sesión
+        </a>
+      }
+    </div>
+  </mat-toolbar>
+
+  <!-- MAIN SIDENAV & CONTENT CONTAINER -->
+  <mat-sidenav-container class="flex-1 overflow-hidden bg-slate-50">
+    <!-- SIDENAV -->
+    <mat-sidenav
+      [opened]="isSidenavOpened()"
+      mode="side"
+      class="!w-64 !bg-white !border-r !border-slate-200/80 !p-4 flex flex-col justify-between"
+    >
+      <div class="space-y-6">
+        <!-- Navigation Section -->
+        <div>
+          <span class="text-[11px] font-bold text-slate-400 px-3 uppercase tracking-wider block mb-2">
+            Navegación
+          </span>
+          <nav class="space-y-1">
+            <!-- Dashboard (Admin/Manager) -->
+            @if (auth.isAdmin() || auth.isManager()) {
+              <a
+                routerLink="/dashboard"
+                routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
+                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
+              >
+                <mat-icon class="text-indigo-600 text-xl">dashboard</mat-icon>
+                <span>Dashboard</span>
+              </a>
+            }
+
+            <!-- Products -->
+            <a
+              routerLink="/products"
+              routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
+              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
+            >
+              <mat-icon class="text-indigo-600 text-xl">store</mat-icon>
+              <span>Productos</span>
+            </a>
+
+            <!-- Categories (Admin/Manager) -->
+            @if (auth.isAdmin() || auth.isManager()) {
+              <a
+                routerLink="/categories"
+                routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
+                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
+              >
+                <mat-icon class="text-indigo-600 text-xl">category</mat-icon>
+                <span>Categorías</span>
+              </a>
+            }
+
+            <!-- Users (Admin only) -->
+            @if (auth.isAdmin()) {
+              <a
+                routerLink="/users"
+                routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
+                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
+              >
+                <mat-icon class="text-indigo-600 text-xl">manage_accounts</mat-icon>
+                <span>Usuarios & Roles</span>
+              </a>
+            }
+
+            <!-- Cart -->
+            <a
+              routerLink="/cart"
+              routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
+              class="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
+            >
+              <div class="flex items-center gap-3">
+                <mat-icon class="text-indigo-600 text-xl">shopping_cart</mat-icon>
+                <span>Carrito</span>
+              </div>
+              @if (cart.totalItems() > 0) {
+                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-600 text-white">
+                  {{ cart.totalItems() }}
+                </span>
+              }
+            </a>
+
+            <!-- Orders -->
+            <a
+              routerLink="/orders"
+              routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
+              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
+            >
+              <mat-icon class="text-indigo-600 text-xl">receipt_long</mat-icon>
+              <span>Pedidos</span>
+            </a>
+
+            <!-- Architecture Viewer -->
+            <a
+              routerLink="/architecture"
+              routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
+              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
+            >
+              <mat-icon class="text-indigo-600 text-xl">account_tree</mat-icon>
+              <span>Arquitectura FEAN</span>
+            </a>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Sidenav Footer Badge -->
+      <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 mt-auto">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="text-xs font-bold text-slate-800">Stack Conectado</span>
+        </div>
+        <p class="text-[11px] text-slate-500 leading-snug">
+          Angular 22 + Express 5 Node.js + Firebase Firestore & Auth
+        </p>
+      </div>
+    </mat-sidenav>
+
+    <!-- CONTENT AREA -->
+    <mat-sidenav-content class="p-4 sm:p-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto">
+        <router-outlet></router-outlet>
+      </div>
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+
+  <!-- Slide-out Cart Drawer -->
+  <app-cart-drawer></app-cart-drawer>
+</div>

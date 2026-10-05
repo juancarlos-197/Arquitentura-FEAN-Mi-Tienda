@@ -1,0 +1,7 @@
+{
+  "name": "Mi Tienda - Arquitectura FEAN",
+  "description": "Plataforma empresarial de comercio electrónico 'Mi Tienda' implementada con arquitectura FEAN (Firebase, Express, Angular 22, Node.js), módulos core/features/shared, Signals y Angular Material.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
