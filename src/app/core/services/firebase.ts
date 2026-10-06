@@ -15,6 +15,7 @@ import {
   getDocs,
   getDocFromServer,
   addDoc,
+  setDoc,
   serverTimestamp,
   onSnapshot,
   Firestore,
@@ -22,6 +23,8 @@ import {
 } from 'firebase/firestore';
 import { firebaseConfig, FIREBASE_CONFIG } from '../config/firebase.config';
 import { Notification } from './notification';
+import { INITIAL_PRODUCTS } from '../../shared/data/initial-products';
+import { Product } from '../../shared/models';
 
 export enum OperationType {
   CREATE = 'create',
@@ -171,5 +174,39 @@ export class Firebase {
         this.handleFirestoreError(error, OperationType.GET, colName);
       }
     );
+  }
+
+  /**
+   * Inicializa la colección 'products' en Cloud Firestore con el catálogo base
+   */
+  async initializeProductsCollection(): Promise<{ count: number; ids: string[] }> {
+    const ids: string[] = [];
+    try {
+      for (const prod of INITIAL_PRODUCTS) {
+        const docRef = doc(this.firestore, 'products', prod.id);
+        await setDoc(docRef, {
+          ...prod,
+          updatedAt: new Date().toISOString(),
+          syncedToFirestoreAt: serverTimestamp(),
+        }, { merge: true });
+        ids.push(prod.id);
+      }
+      this.notification.success(`Colección 'products' inicializada en Cloud Firestore (${ids.length} documentos)`);
+      return { count: ids.length, ids };
+    } catch (error) {
+      this.handleFirestoreError(error, OperationType.WRITE, 'products');
+    }
+  }
+
+  /**
+   * Obtiene todos los productos directamente desde Cloud Firestore
+   */
+  async getFirestoreProducts(): Promise<Product[]> {
+    try {
+      const snap = await getDocs(collection(this.firestore, 'products'));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Product);
+    } catch (error) {
+      this.handleFirestoreError(error, OperationType.GET, 'products');
+    }
   }
 }

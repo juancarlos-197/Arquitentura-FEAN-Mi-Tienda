@@ -382,16 +382,29 @@ interface ArchitectureData {
                 }
               </div>
 
-              <button
-                type="button"
-                mat-flat-button
-                color="accent"
-                (click)="runFirestoreExample()"
-                class="w-full !rounded-xl !font-bold"
-              >
-                <mat-icon class="mr-1">add_circle</mat-icon>
-                Insertar Doc en Firestore
-              </button>
+              <div class="space-y-2">
+                <button
+                  type="button"
+                  mat-flat-button
+                  color="accent"
+                  (click)="runFirestoreExample()"
+                  class="w-full !rounded-xl !font-bold"
+                >
+                  <mat-icon class="mr-1">add_circle</mat-icon>
+                  Insertar Doc de Prueba
+                </button>
+
+                <button
+                  type="button"
+                  mat-stroked-button
+                  color="primary"
+                  (click)="seedFirestoreProducts()"
+                  class="w-full !rounded-xl !font-bold text-amber-800 border-amber-300 bg-amber-50 hover:bg-amber-100"
+                >
+                  <mat-icon class="mr-1 text-amber-600">inventory</mat-icon>
+                  Iniciar Colección 'products' en Firestore
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -490,6 +503,18 @@ export class ArchitectureViewer implements OnInit {
       });
       this.firestoreLastId.set(docId);
       this.loadStatus();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async seedFirestoreProducts(): Promise<void> {
+    try {
+      const res = await this.firebaseService.initializeProductsCollection();
+      if (res) {
+        this.firestoreLastId.set(`products: ${res.count} docs`);
+        this.loadStatus();
+      }
     } catch (err) {
       console.error(err);
     }

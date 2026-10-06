@@ -21,6 +21,7 @@ import { ConfirmDialog } from '../../../../shared/components/confirm-dialog/conf
 import { LoadingSpinner } from '../../../../shared/components/loading/loading-spinner';
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
 import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pipe';
+import { Firebase } from '../../../../core/services/firebase';
 
 @Component({
   selector: 'app-products-list',
@@ -49,17 +50,31 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
         subtitle="Artículos sincronizados en tiempo real mediante Express REST y Firebase"
         icon="store"
       >
-        @if (auth.isAdmin() || auth.isManager()) {
+        <div class="flex items-center gap-2">
           <button
-            mat-flat-button
-            color="primary"
-            class="rounded-xl font-medium shadow-sm"
-            (click)="openProductDialog()"
+            type="button"
+            mat-stroked-button
+            class="rounded-xl font-medium text-amber-800 border-amber-300 bg-amber-50 hover:bg-amber-100 transition-all cursor-pointer"
+            (click)="seedFirestoreProducts()"
+            [disabled]="isSeedingFirestore()"
+            matTooltip="Inicializa la colección 'products' en Cloud Firestore"
           >
-            <mat-icon class="mr-1">add</mat-icon>
-            Nuevo Producto
+            <mat-icon class="mr-1 text-amber-600">local_fire_department</mat-icon>
+            {{ isSeedingFirestore() ? 'Sincronizando...' : 'Iniciar Colección Firestore' }}
           </button>
-        }
+
+          @if (auth.isAdmin() || auth.isManager()) {
+            <button
+              mat-flat-button
+              color="primary"
+              class="rounded-xl font-medium shadow-sm"
+              (click)="openProductDialog()"
+            >
+              <mat-icon class="mr-1">add</mat-icon>
+              Nuevo Producto
+            </button>
+          }
+        </div>
       </app-page-header>
 
       <!-- Category Filter Chips -->
@@ -313,12 +328,14 @@ export class ProductsList implements OnInit {
   readonly categoriesService = inject(Categories);
   readonly auth = inject(Auth);
   readonly cart = inject(Cart);
+  readonly firebase = inject(Firebase);
   private readonly dialog = inject(MatDialog);
 
   readonly viewMode = signal<'grid' | 'table'>('grid');
   readonly selectedCategory = signal<string>('all');
   readonly searchTerm = signal<string>('');
   readonly sortBy = signal<string>('newest');
+  readonly isSeedingFirestore = signal<boolean>(false);
 
   readonly tableColumns = ['image', 'name', 'price', 'stock', 'actions'];
 
@@ -398,6 +415,16 @@ export class ProductsList implements OnInit {
     this.selectedCategory.set('all');
     this.searchTerm.set('');
     this.sortBy.set('newest');
+  }
+
+  async seedFirestoreProducts(): Promise<void> {
+    this.isSeedingFirestore.set(true);
+    try {
+      await this.firebase.initializeProductsCollection();
+      this.productsService.loadProducts().subscribe();
+    } finally {
+      this.isSeedingFirestore.set(false);
+    }
   }
 
   openProductDialog(product?: Product): void {
