@@ -39,6 +39,8 @@ export class Users {
     return this.http.post<ApiResponse<User>>(API_CONFIG.endpoints.users, data).pipe(
       tap(res => {
         if (res.success && res.data) {
+console.log('Usuario creado:',res.data)
+
           this._users.update(list => [res.data!, ...list]);
           this.notification.success('Usuario creado en Firebase Auth & Firestore');
         }
