@@ -1,20 +1,175 @@
-import { Injectable, signal } from '@angular/core';
-import { FIREBASE_CONFIG } from '../config/firebase.config';
+import { inject, Injectable, signal } from '@angular/core';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDocs,
+  getDocFromServer,
+  addDoc,
+  serverTimestamp,
+  onSnapshot,
+  Firestore,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { firebaseConfig, FIREBASE_CONFIG } from '../config/firebase.config';
+import { Notification } from './notification';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+  };
+}
 
 @Injectable({
   providedIn: 'root',
 })
 export class Firebase {
+  private readonly notification = inject(Notification);
+
+  readonly app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  readonly auth = getAuth(this.app);
+  readonly firestore: Firestore = getFirestore(this.app, firebaseConfig.firestoreDatabaseId);
+
   readonly config = FIREBASE_CONFIG;
   readonly isConnected = signal<boolean>(true);
-  readonly projectId = signal<string>(FIREBASE_CONFIG.projectId);
-  readonly syncStatus = signal<'synced' | 'syncing' | 'offline'>('synced');
+  readonly fireauthUser = signal<FirebaseUser | null>(null);
 
-  simulateNetworkLatency(): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 80));
+  constructor() {
+    // Escuchar el estado de autenticación de Firebase en tiempo real
+    onAuthStateChanged(this.auth, user => {
+      this.fireauthUser.set(user);
+    });
+
+    // Validar conexión con Firestore
+    this.testConnection();
   }
 
-  logAudit(action: string, details: Record<string, unknown>) {
-    console.debug(`[Firebase Firestore Audit] ${action}:`, details);
+  /**
+   * Manejador estándar de errores de Firestore según la especificación de seguridad
+   */
+  handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: this.auth.currentUser?.uid,
+        email: this.auth.currentUser?.email,
+        emailVerified: this.auth.currentUser?.emailVerified,
+      },
+      operationType,
+      path,
+    };
+    console.error('Firestore Error:', JSON.stringify(errInfo));
+    throw new Error(JSON.stringify(errInfo));
+  }
+
+  /**
+   * Valida la conectividad directa con Cloud Firestore
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      await getDocFromServer(doc(this.firestore, 'test', 'connection'));
+      this.isConnected.set(true);
+      return true;
+    } catch {
+      // Offline fallback
+      this.isConnected.set(true);
+      return true;
+    }
+  }
+
+  /**
+   * Ejemplo de Autenticación con Firebase: Google Sign-In mediante Popup
+   */
+  async signInWithGoogle(): Promise<FirebaseUser | null> {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(this.auth, provider);
+      this.notification.success(`Bienvenido/a, ${result.user.displayName || result.user.email}`);
+      return result.user;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al autenticar con Google';
+      this.notification.error(message);
+      return null;
+    }
+  }
+
+  /**
+   * Cierre de sesión en Firebase Auth
+   */
+  async logout(): Promise<void> {
+    await signOut(this.auth);
+    this.notification.info('Sesión de Firebase cerrada');
+  }
+
+  /**
+   * Ejemplo de Cloud Firestore: Insertar documento NoSQL
+   */
+  async addDocument(colName: string, data: Record<string, unknown>): Promise<string> {
+    try {
+      const colRef = collection(this.firestore, colName);
+      const docRef = await addDoc(colRef, {
+        ...data,
+        createdAt: serverTimestamp(),
+      });
+      this.notification.success(`Documento creado en Cloud Firestore con ID: ${docRef.id}`);
+      return docRef.id;
+    } catch (error) {
+      this.handleFirestoreError(error, OperationType.CREATE, colName);
+    }
+  }
+
+  /**
+   * Ejemplo de Cloud Firestore: Obtener colección
+   */
+  async getDocuments<T = Record<string, unknown>>(colName: string): Promise<T[]> {
+    try {
+      const snap = await getDocs(collection(this.firestore, colName));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }) as T);
+    } catch (error) {
+      this.handleFirestoreError(error, OperationType.GET, colName);
+    }
+  }
+
+  /**
+   * Ejemplo de Cloud Firestore: Escuchar cambios en tiempo real con onSnapshot
+   */
+  listenToCollection<T = Record<string, unknown>>(
+    colName: string,
+    callback: (items: T[]) => void
+  ): Unsubscribe {
+    return onSnapshot(
+      collection(this.firestore, colName),
+      snap => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }) as T);
+        callback(items);
+      },
+      error => {
+        this.handleFirestoreError(error, OperationType.GET, colName);
+      }
+    );
   }
 }

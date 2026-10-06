@@ -2,8 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
@@ -12,47 +11,49 @@ service cloud.firestore {
     }
 
     function hasRole(role) {
-      return isAuthenticated() && getUserData().role == role;
-    }
-
-    function isAdmin() {
-      return hasRole('ADMIN');
-    }
-
-    function isManager() {
-      return hasRole('MANAGER');
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == role;
     }
 
     function isStaff() {
-      return isAdmin() || isManager();
+      return hasRole('ADMIN') || hasRole('MANAGER') || (isSignedIn() && request.auth.token.email == 'jalban.dacompsc@gmail.com');
     }
 
-    // Colección: users
-    match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isStaff());
-      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAdmin();
+    // Global Safety Net: default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
 
     // Colección: products
     match /products/{productId} {
-      allow read: if true; // Catálogo público
-      allow create, update, delete: if isStaff(); // Solo Admin y Manager
+      allow read: if true;
+      allow write: if isStaff();
     }
 
     // Colección: categories
     match /categories/{categoryId} {
-      allow read: if true; // Categorías públicas
-      allow create, update, delete: if isStaff(); // Solo Admin y Manager
+      allow read: if true;
+      allow write: if isStaff();
     }
 
     // Colección: orders
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (resource.data.customerId == request.auth.uid || isStaff());
-      allow create: if isAuthenticated();
-      allow update: if isStaff(); // Modificar estado de envío
-      allow delete: if isAdmin();
+      allow read: if isStaff() || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isStaff();
+      allow delete: if hasRole('ADMIN') || (isSignedIn() && request.auth.token.email == 'jalban.dacompsc@gmail.com');
+    }
+
+    // Colección: users
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow delete: if hasRole('ADMIN');
+    }
+
+    // Colección de conectividad / test
+    match /test/{docId} {
+      allow read, write: if true;
     }
   }
 }

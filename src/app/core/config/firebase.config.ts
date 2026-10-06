@@ -16,4 +16,3 @@ export const FIREBASE_CONFIG = {
     CUSTOMER: 'CUSTOMER',
   },
 };
-

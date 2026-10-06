@@ -5,6 +5,7 @@ import { Observable, tap, catchError, throwError } from 'rxjs';
 import { API_CONFIG } from '../config/api.config';
 import { ApiResponse, AuthResponse, User, UserRole } from '../../shared/models';
 import { Notification } from './notification';
+import { Firebase } from './firebase';
 
 const STORAGE_KEY_TOKEN = 'fean_auth_token';
 const STORAGE_KEY_USER = 'fean_auth_user';
@@ -16,6 +17,7 @@ export class Auth {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly notification = inject(Notification);
+  private readonly firebaseService = inject(Firebase);
 
   private readonly _currentUser = signal<User | null>(this.getInitialUser());
   private readonly _token = signal<string | null>(this.getInitialToken());
@@ -107,6 +109,27 @@ export class Auth {
         return throwError(() => err);
       })
     );
+  }
+
+  async loginWithGoogle(): Promise<boolean> {
+    const fireUser = await this.firebaseService.signInWithGoogle();
+    if (!fireUser) return false;
+
+    const token = await fireUser.getIdToken();
+    const user: User = {
+      id: fireUser.uid,
+      name: fireUser.displayName || 'Usuario Google',
+      email: fireUser.email || 'usuario@firebase.com',
+      role: fireUser.email === 'jalban.dacompsc@gmail.com' ? 'ADMIN' : 'CUSTOMER',
+      active: true,
+      avatarUrl: fireUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.setSession(token, user);
+    this.router.navigate(['/products']);
+    return true;
   }
 
   logout(): void {

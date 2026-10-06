@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Producto disponible en el catálogo de la tienda",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "categoryId": { "type": "string", "maxLength": 100 },
+        "categoryName": { "type": "string", "maxLength": 100 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "active": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "price", "stock", "categoryId"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Categoría taxonómica del catálogo",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "icon": { "type": "string", "maxLength": 50 },
+        "active": { "type": "boolean" },
+        "productCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Pedido de compra realizado por un cliente",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string", "maxLength": 150 },
+        "customerEmail": { "type": "string", "maxLength": 200 },
+        "total": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]
+        },
+        "shippingAddress": { "type": "string", "maxLength": 500 },
+        "paymentMethod": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "customerEmail", "total", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Perfil de usuario del sistema con rol asignado",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "maxLength": 200 },
+        "name": { "type": "string", "maxLength": 150 },
+        "role": {
+          "type": "string",
+          "enum": ["ADMIN", "MANAGER", "CUSTOMER"]
+        },
+        "active": { "type": "boolean" },
+        "phone": { "type": "string", "maxLength": 50 },
+        "avatarUrl": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "name", "role"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Colección de productos del catálogo público"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Colección de categorías taxonómicas"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Colección de pedidos y facturación"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Colección de usuarios con control RBAC"
+    }
+  }
+}
