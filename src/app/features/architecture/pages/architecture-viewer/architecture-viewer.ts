@@ -265,16 +265,29 @@ interface ArchitectureData {
                 }
               </div>
 
-              <button
-                type="button"
-                mat-flat-button
-                color="primary"
-                (click)="runRestExample()"
-                class="w-full !rounded-xl !font-bold"
-              >
-                <mat-icon class="mr-1">send</mat-icon>
-                Ejecutar GET /api/products
-              </button>
+              <div class="space-y-2">
+                <button
+                  type="button"
+                  mat-flat-button
+                  color="primary"
+                  (click)="runRestExample()"
+                  class="w-full !rounded-xl !font-bold"
+                >
+                  <mat-icon class="mr-1">send</mat-icon>
+                  Ejecutar GET /api/products
+                </button>
+
+                <button
+                  type="button"
+                  mat-stroked-button
+                  color="warn"
+                  (click)="runDeleteRestExample()"
+                  class="w-full !rounded-xl !font-bold"
+                >
+                  <mat-icon class="mr-1">delete_outline</mat-icon>
+                  Borrar en Servidor API REST
+                </button>
+              </div>
             </div>
 
             <!-- EJEMPLO 2: FIREBASE AUTHENTICATION -->
@@ -487,6 +500,37 @@ export class ArchitectureViewer implements OnInit {
       },
       error: (err) => {
         this.notification.error('Error al ejecutar petición REST');
+        console.error(err);
+      },
+    });
+  }
+
+  // Ejemplo 1B: Borrar en servidor API REST (DELETE /api/products/:id)
+  runDeleteRestExample(): void {
+    const t0 = performance.now();
+    this.http.get<{ success: boolean; data: { id: string; name: string }[] }>(API_CONFIG.endpoints.products).subscribe({
+      next: (res) => {
+        if (!res.data || res.data.length === 0) {
+          this.notification.warning('No hay productos en el servidor para borrar');
+          return;
+        }
+        const target = res.data[res.data.length - 1];
+        this.http.delete<{ success: boolean; message: string }>(`${API_CONFIG.endpoints.products}/${target.id}`).subscribe({
+          next: (delRes) => {
+            const elapsed = Math.round(performance.now() - t0);
+            this.restTime.set(elapsed);
+            this.restResult.set(`DELETE 200 OK: ${delRes.message} en ${elapsed}ms`);
+            this.notification.success(`Borrado en API REST: ${delRes.message}`);
+            this.loadStatus();
+          },
+          error: (err) => {
+            this.notification.error('Error al borrar en el servidor REST');
+            console.error(err);
+          },
+        });
+      },
+      error: (err) => {
+        this.notification.error('Error al consultar productos para borrar');
         console.error(err);
       },
     });

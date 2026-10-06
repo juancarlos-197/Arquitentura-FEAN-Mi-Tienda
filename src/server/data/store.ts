@@ -537,6 +537,10 @@ class MemoryStore {
     return true;
   }
 
+  clearProducts(): void {
+    this.data.products = [];
+  }
+
   // Orders
   getOrders(): Order[] {
     return this.data.orders;

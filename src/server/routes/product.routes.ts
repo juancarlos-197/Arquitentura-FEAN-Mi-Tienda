@@ -125,5 +125,10 @@ productRouter.delete('/:id', (req, res) => {
   if (!ok) {
     return res.status(404).json({ success: false, error: 'Producto no encontrado' });
   }
-  return res.json({ success: true, message: 'Producto eliminado correctamente' });
+  return res.json({ success: true, message: `Producto '${req.params.id}' eliminado correctamente del servidor API REST` });
+});
+
+productRouter.delete('/', (req, res) => {
+  store.clearProducts();
+  return res.json({ success: true, message: 'Todos los productos han sido eliminados del servidor API REST' });
 });
