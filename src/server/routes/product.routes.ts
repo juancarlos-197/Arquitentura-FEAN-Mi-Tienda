@@ -52,10 +52,23 @@ productRouter.get('/', (req, res) => {
     }
   }
 
+  const total = products.length;
+  const pageNum = req.query['page'] ? parseInt(req.query['page'] as string, 10) : undefined;
+  const limitNum = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : undefined;
+
+  let resultData = products;
+  if (pageNum && limitNum && pageNum > 0 && limitNum > 0) {
+    const startIndex = (pageNum - 1) * limitNum;
+    resultData = products.slice(startIndex, startIndex + limitNum);
+  }
+
   res.json({
     success: true,
-    data: products,
-    total: products.length,
+    data: resultData,
+    total,
+    page: pageNum || 1,
+    limit: limitNum || total,
+    totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
   });
 });
 

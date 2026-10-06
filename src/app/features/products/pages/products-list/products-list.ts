@@ -8,6 +8,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatDialog } from '@angular/material/dialog';
 import { Products } from '../../services/products';
 import { Categories } from '../../../categories/services/categories';
@@ -36,6 +37,7 @@ import { Firebase } from '../../../../core/services/firebase';
     MatChipsModule,
     MatButtonToggleModule,
     MatTableModule,
+    MatPaginatorModule,
     PageHeader,
     ProductCard,
     LoadingSpinner,
@@ -215,7 +217,7 @@ import { Firebase } from '../../../../core/services/firebase';
         <!-- Grid View -->
         @if (viewMode() === 'grid') {
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            @for (product of filteredProducts(); track product.id) {
+            @for (product of paginatedProducts(); track product.id) {
               <app-product-card
                 [product]="product"
                 (editClicked)="openProductDialog($any($event))"
@@ -227,7 +229,7 @@ import { Firebase } from '../../../../core/services/firebase';
           <!-- Table View -->
           <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div class="overflow-x-auto">
-              <table mat-table [dataSource]="filteredProducts()" class="w-full">
+              <table mat-table [dataSource]="paginatedProducts()" class="w-full">
                 <!-- Image Column -->
                 <ng-container matColumnDef="image">
                   <th mat-header-cell *matHeaderCellDef class="font-semibold text-slate-700 w-16">Imagen</th>
@@ -319,6 +321,26 @@ import { Firebase } from '../../../../core/services/firebase';
             </div>
           </div>
         }
+
+        <!-- Paginator Controls -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden mt-6 flex flex-col sm:flex-row items-center justify-between p-2 sm:px-4 gap-2">
+          <div class="text-xs text-slate-500 font-medium px-2">
+            Mostrando página <strong class="text-indigo-600 font-bold">{{ pageIndex() + 1 }}</strong> de
+            <strong class="text-indigo-600 font-bold">{{ totalPages() }}</strong>
+            <span class="text-slate-400 ml-1">({{ filteredProducts().length }} productos)</span>
+          </div>
+
+          <mat-paginator
+            [length]="filteredProducts().length"
+            [pageSize]="pageSize()"
+            [pageIndex]="pageIndex()"
+            [pageSizeOptions]="pageSizeOptions"
+            (page)="onPageChange($event)"
+            showFirstLastButtons
+            aria-label="Paginación de productos"
+            class="!border-none !bg-transparent"
+          ></mat-paginator>
+        </div>
       }
     </div>
   `,
@@ -337,9 +359,20 @@ export class ProductsList implements OnInit {
   readonly sortBy = signal<string>('newest');
   readonly isSeedingFirestore = signal<boolean>(false);
 
+  // Estados reactivos de paginación
+  readonly pageIndex = signal<number>(0);
+  readonly pageSize = signal<number>(8);
+  readonly pageSizeOptions = [4, 8, 12, 24];
+
   readonly tableColumns = ['image', 'name', 'price', 'stock', 'actions'];
 
   readonly totalCount = computed(() => this.productsService.products().length);
+
+  readonly totalPages = computed(() => {
+    const total = this.filteredProducts().length;
+    const size = this.pageSize();
+    return Math.max(1, Math.ceil(total / size));
+  });
 
   /**
    * Señal computada para filtrado en tiempo real reactivo y de alto rendimiento.
@@ -389,32 +422,55 @@ export class ProductsList implements OnInit {
     return sorted;
   });
 
+  /**
+   * Productos de la página actual calculados mediante Signals
+   */
+  readonly paginatedProducts = computed(() => {
+    const list = this.filteredProducts();
+    const start = this.pageIndex() * this.pageSize();
+    return list.slice(start, start + this.pageSize());
+  });
+
   ngOnInit(): void {
     this.productsService.loadProducts().subscribe();
     this.categoriesService.loadCategories().subscribe();
   }
 
+  onPageChange(event: PageEvent): void {
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   onSearchInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.searchTerm.set(input.value);
+    this.pageIndex.set(0);
   }
 
   clearSearch(): void {
     this.searchTerm.set('');
+    this.pageIndex.set(0);
   }
 
   onSortChange(value: string): void {
     this.sortBy.set(value);
+    this.pageIndex.set(0);
   }
 
   selectCategory(catId: string): void {
     this.selectedCategory.set(catId);
+    this.pageIndex.set(0);
   }
 
   resetFilters(): void {
     this.selectedCategory.set('all');
     this.searchTerm.set('');
     this.sortBy.set('newest');
+    this.pageIndex.set(0);
+    this.pageSize.set(8);
   }
 
   async seedFirestoreProducts(): Promise<void> {
