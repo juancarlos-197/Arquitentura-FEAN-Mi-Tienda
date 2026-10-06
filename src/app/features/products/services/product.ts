@@ -1,7 +1,7 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, tap, catchError, throwError } from 'rxjs';
-import { API_CONFIG } from '../../../core/config/api.config';
+import { FIREBASE_CONFIG } from '../../../core/config/firebase.config';
 import { ApiResponse, Product } from '../../../shared/models';
 import { Notification } from '../../../core/services/notification';
 
@@ -62,7 +62,7 @@ export class ProductService {
       }
     }
 
-    return this.http.get<ApiResponse<Product[]>>(API_CONFIG.endpoints.products, { params }).pipe(
+    return this.http.get<ApiResponse<Product[]>>(FIREBASE_CONFIG.endpoints.products, { params }).pipe(
       tap(res => {
         this._loading.set(false);
         if (res.success && res.data) {
@@ -86,7 +86,7 @@ export class ProductService {
     this._loading.set(true);
     this._error.set(null);
 
-    return this.http.get<ApiResponse<Product>>(`${API_CONFIG.endpoints.products}/${id}`).pipe(
+    return this.http.get<ApiResponse<Product>>(`${FIREBASE_CONFIG.endpoints.products}/${id}`).pipe(
       tap(res => {
         this._loading.set(false);
         if (res.success && res.data) {
@@ -108,7 +108,7 @@ export class ProductService {
    */
   createProduct(data: Partial<Product>): Observable<ApiResponse<Product>> {
     this._loading.set(true);
-    return this.http.post<ApiResponse<Product>>(API_CONFIG.endpoints.products, data).pipe(
+    return this.http.post<ApiResponse<Product>>(FIREBASE_CONFIG.endpoints.products, data).pipe(
       tap(res => {
         this._loading.set(false);
         if (res.success && res.data) {
@@ -129,7 +129,7 @@ export class ProductService {
    */
   updateProduct(id: string, data: Partial<Product>): Observable<ApiResponse<Product>> {
     this._loading.set(true);
-    return this.http.put<ApiResponse<Product>>(`${API_CONFIG.endpoints.products}/${id}`, data).pipe(
+    return this.http.put<ApiResponse<Product>>(`${FIREBASE_CONFIG.endpoints.products}/${id}`, data).pipe(
       tap(res => {
         this._loading.set(false);
         if (res.success && res.data) {
@@ -153,7 +153,7 @@ export class ProductService {
    */
   deleteProduct(id: string): Observable<ApiResponse> {
     this._loading.set(true);
-    return this.http.delete<ApiResponse>(`${API_CONFIG.endpoints.products}/${id}`).pipe(
+    return this.http.delete<ApiResponse>(`${FIREBASE_CONFIG.endpoints.products}/${id}`).pipe(
       tap(res => {
         this._loading.set(false);
         if (res.success) {

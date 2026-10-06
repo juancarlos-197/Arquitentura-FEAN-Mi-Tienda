@@ -10,6 +10,12 @@ export const FIREBASE_CONFIG = {
     categories: 'categories',
     orders: 'orders',
   },
+  endpoints: {
+    products: 'products',
+    categories: 'categories',
+    users: 'users',
+    orders: 'orders',
+  },
   roles: {
     ADMIN: 'ADMIN',
     MANAGER: 'MANAGER',
