@@ -61,18 +61,8 @@
       </button>
     </div>
 
-    <!-- Right Actions: Architecture, Cart & User Menu -->
+    <!-- Right Actions: Cart & User Menu -->
     <div class="flex items-center gap-2">
-      <!-- Architecture Doc Shortcut -->
-      <a
-        routerLink="/architecture"
-        mat-button
-        class="!hidden sm:!inline-flex !rounded-xl !text-xs !font-semibold !text-indigo-600 !border !border-indigo-100 hover:!bg-indigo-50"
-      >
-        <mat-icon class="text-sm mr-1">schema</mat-icon>
-        Capas FEAN
-      </a>
-
       <!-- Cart Drawer Trigger Button with Badge -->
       <button
         type="button"
@@ -235,16 +225,6 @@
             >
               <mat-icon class="text-indigo-600 text-xl">receipt_long</mat-icon>
               <span>Pedidos</span>
-            </a>
-
-            <!-- Architecture Viewer -->
-            <a
-              routerLink="/architecture"
-              routerLinkActive="bg-indigo-50 text-indigo-700 font-bold border-indigo-200"
-              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent"
-            >
-              <mat-icon class="text-indigo-600 text-xl">account_tree</mat-icon>
-              <span>Arquitectura FEAN</span>
             </a>
           </nav>
         </div>
