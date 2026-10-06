@@ -334,12 +334,17 @@ import { Firebase } from '../../../../core/services/firebase';
             [length]="filteredProducts().length"
             [pageSize]="pageSize()"
             [pageIndex]="pageIndex()"
-            [pageSizeOptions]="pageSizeOptions"
+            [pageSizeOptions]="[10, 50, 100]"
             (page)="onPageChange($event)"
             showFirstLastButtons
-            aria-label="Paginación de productos"
+            aria-label="Select page"
             class="!border-none !bg-transparent"
           ></mat-paginator>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] text-slate-400 px-3 pt-1 font-mono">
+          <span>&lt;mat-paginator [length]="{{ filteredProducts().length }}" [pageSizeOptions]="[10, 50, 100]" aria-label="Select page"&gt;</span>
+          <span class="text-indigo-600 font-semibold font-sans">Angular Material</span>
         </div>
       }
     </div>
@@ -361,8 +366,8 @@ export class ProductsList implements OnInit {
 
   // Estados reactivos de paginación
   readonly pageIndex = signal<number>(0);
-  readonly pageSize = signal<number>(8);
-  readonly pageSizeOptions = [4, 8, 12, 24];
+  readonly pageSize = signal<number>(10);
+  readonly pageSizeOptions = [10, 50, 100];
 
   readonly tableColumns = ['image', 'name', 'price', 'stock', 'actions'];
 
@@ -470,7 +475,7 @@ export class ProductsList implements OnInit {
     this.searchTerm.set('');
     this.sortBy.set('newest');
     this.pageIndex.set(0);
-    this.pageSize.set(8);
+    this.pageSize.set(10);
   }
 
   async seedFirestoreProducts(): Promise<void> {
