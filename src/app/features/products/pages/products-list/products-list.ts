@@ -227,87 +227,93 @@ import { Firebase } from '../../../../core/services/firebase';
           </div>
         } @else {
           <!-- Table View -->
-          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div class="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div class="overflow-x-auto">
               <table mat-table [dataSource]="paginatedProducts()" class="w-full">
                 <!-- Image Column -->
                 <ng-container matColumnDef="image">
-                  <th mat-header-cell *matHeaderCellDef class="font-semibold text-slate-700 w-16">Imagen</th>
-                  <td mat-cell *matCellDef="let p" class="py-3">
+                  <th mat-header-cell *matHeaderCellDef class="font-bold text-slate-500 text-xs uppercase tracking-wider w-20 pl-6 py-4">Imagen</th>
+                  <td mat-cell *matCellDef="let p" class="py-4 pl-6">
                     <img
                       [src]="p.imageUrl"
                       [alt]="p.name"
                       referrerpolicy="no-referrer"
-                      class="w-12 h-12 rounded-xl object-cover border border-slate-200"
+                      class="w-14 h-14 rounded-2xl object-cover border border-slate-200/80 shadow-xs"
                     />
                   </td>
                 </ng-container>
 
                 <!-- Name & Category Column -->
                 <ng-container matColumnDef="name">
-                  <th mat-header-cell *matHeaderCellDef class="font-semibold text-slate-700">Producto</th>
-                  <td mat-cell *matCellDef="let p" class="py-3">
-                    <a [routerLink]="['/products', p.id]" class="font-bold text-slate-900 hover:text-indigo-600 transition-colors block">
+                  <th mat-header-cell *matHeaderCellDef class="font-bold text-slate-500 text-xs uppercase tracking-wider py-4">Producto</th>
+                  <td mat-cell *matCellDef="let p" class="py-4">
+                    <a [routerLink]="['/products', p.id]" class="font-extrabold text-slate-900 hover:text-indigo-600 transition-colors block text-sm">
                       {{ p.name }}
                     </a>
-                    <span class="text-xs text-indigo-600 font-medium">{{ p.categoryName || 'General' }}</span>
+                    <span class="inline-flex items-center gap-1 text-[11px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md mt-1">
+                      <span class="w-1 h-1 rounded-full bg-indigo-500"></span>
+                      {{ p.categoryName || 'General' }}
+                    </span>
                   </td>
                 </ng-container>
 
                 <!-- Price Column -->
                 <ng-container matColumnDef="price">
-                  <th mat-header-cell *matHeaderCellDef class="font-semibold text-slate-700">Precio</th>
-                  <td mat-cell *matCellDef="let p" class="font-bold text-slate-900">
+                  <th mat-header-cell *matHeaderCellDef class="font-bold text-slate-500 text-xs uppercase tracking-wider py-4">Precio</th>
+                  <td mat-cell *matCellDef="let p" class="font-black text-slate-900 text-base py-4">
                     {{ p.price | currencyFormat }}
                   </td>
                 </ng-container>
 
                 <!-- Stock Column -->
                 <ng-container matColumnDef="stock">
-                  <th mat-header-cell *matHeaderCellDef class="font-semibold text-slate-700">Stock</th>
-                  <td mat-cell *matCellDef="let p">
+                  <th mat-header-cell *matHeaderCellDef class="font-bold text-slate-500 text-xs uppercase tracking-wider py-4">Inventario</th>
+                  <td mat-cell *matCellDef="let p" class="py-4">
                     <span
-                      class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                      class="px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider inline-flex items-center gap-1.5"
                       [class]="p.stock > 0 ? (p.stock < 5 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200') : 'bg-rose-50 text-rose-700 border border-rose-200'"
                     >
-                      {{ p.stock > 0 ? p.stock + ' unidades' : 'Agotado' }}
+                      <span
+                        class="w-1.5 h-1.5 rounded-full"
+                        [class]="p.stock > 0 ? (p.stock < 5 ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-rose-500'"
+                      ></span>
+                      {{ p.stock > 0 ? p.stock + ' uds' : 'Agotado' }}
                     </span>
                   </td>
                 </ng-container>
 
                 <!-- Actions Column -->
                 <ng-container matColumnDef="actions">
-                  <th mat-header-cell *matHeaderCellDef class="font-semibold text-slate-700 text-right pr-6">Acciones</th>
-                  <td mat-cell *matCellDef="let p" class="text-right pr-6">
+                  <th mat-header-cell *matHeaderCellDef class="font-bold text-slate-500 text-xs uppercase tracking-wider text-right pr-6 py-4">Acciones</th>
+                  <td mat-cell *matCellDef="let p" class="text-right pr-6 py-4">
                     <div class="flex items-center justify-end gap-2">
                       <button
-                        mat-stroked-button
-                        color="primary"
-                        class="rounded-xl text-xs"
+                        type="button"
                         [disabled]="p.stock <= 0"
                         (click)="cart.addItem(p, 1)"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white disabled:text-slate-400 shadow-2xs active:scale-95 transition-all flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
                       >
-                        <mat-icon class="text-xs mr-1">shopping_cart</mat-icon>
-                        Añadir
+                        <mat-icon class="text-xs">shopping_cart</mat-icon>
+                        <span>Añadir</span>
                       </button>
 
                       @if (auth.isAdmin() || auth.isManager()) {
                         <button
-                          mat-icon-button
-                          color="primary"
+                          type="button"
                           (click)="openProductDialog(p)"
+                          class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
                           matTooltip="Editar"
                         >
-                          <mat-icon>edit</mat-icon>
+                          <mat-icon class="text-base">edit</mat-icon>
                         </button>
                         @if (auth.isAdmin()) {
                           <button
-                            mat-icon-button
-                            color="warn"
+                            type="button"
                             (click)="confirmDelete(p)"
+                            class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                             matTooltip="Eliminar"
                           >
-                            <mat-icon>delete</mat-icon>
+                            <mat-icon class="text-base">delete</mat-icon>
                           </button>
                         }
                       }
@@ -315,8 +321,8 @@ import { Firebase } from '../../../../core/services/firebase';
                   </td>
                 </ng-container>
 
-                <tr mat-header-row *matHeaderRowDef="tableColumns" class="bg-slate-50/80 border-b border-slate-200"></tr>
-                <tr mat-row *matRowDef="let row; columns: tableColumns;" class="border-b border-slate-100 hover:bg-slate-50/60 transition-colors"></tr>
+                <tr mat-header-row *matHeaderRowDef="tableColumns" class="bg-slate-50/90 border-b border-slate-200/80"></tr>
+                <tr mat-row *matRowDef="let row; columns: tableColumns;" class="border-b border-slate-100 hover:bg-indigo-50/20 transition-colors"></tr>
               </table>
             </div>
           </div>
