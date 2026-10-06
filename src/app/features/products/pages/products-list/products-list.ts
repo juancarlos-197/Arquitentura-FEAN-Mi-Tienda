@@ -203,8 +203,8 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
             @for (product of filteredProducts(); track product.id) {
               <app-product-card
                 [product]="product"
-                (editClicked)="openProductDialog($event)"
-                (deleteClicked)="confirmDelete($event)"
+                (editClicked)="openProductDialog($any($event))"
+                (deleteClicked)="confirmDelete($any($event))"
               ></app-product-card>
             }
           </div>
