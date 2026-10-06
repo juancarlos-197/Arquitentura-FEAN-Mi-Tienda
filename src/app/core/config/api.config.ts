@@ -1,18 +1,20 @@
+import { environment } from '../../../environments/environment';
+
 export const API_CONFIG = {
-  baseUrl: '/api',
+  baseUrl: environment.apiUrl,
   endpoints: {
     auth: {
-      login: '/api/auth/login',
-      register: '/api/auth/register',
-      forgotPassword: '/api/auth/forgot-password',
-      me: '/api/auth/me',
+      login: `${environment.apiUrl}/auth/login`,
+      register: `${environment.apiUrl}/auth/register`,
+      forgotPassword: `${environment.apiUrl}/auth/forgot-password`,
+      me: `${environment.apiUrl}/auth/me`,
     },
-    products: '/api/products',
-    categories: '/api/categories',
-    users: '/api/users',
-    orders: '/api/orders',
-    dashboard: '/api/dashboard',
-    architecture: '/api/architecture/status',
-    resetData: '/api/architecture/reset-data',
+    products: `${environment.apiUrl}/products`,
+    categories: `${environment.apiUrl}/categories`,
+    users: `${environment.apiUrl}/users`,
+    orders: `${environment.apiUrl}/orders`,
+    dashboard: `${environment.apiUrl}/dashboard`,
+    architecture: `${environment.apiUrl}/architecture/status`,
+    resetData: `${environment.apiUrl}/architecture/reset-data`,
   },
 };
