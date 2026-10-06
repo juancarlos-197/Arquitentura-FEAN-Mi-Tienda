@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -27,7 +26,6 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
   selector: 'app-products-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    ReactiveFormsModule,
     RouterLink,
     MatButtonModule,
     MatIconModule,
@@ -90,20 +88,28 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
       </div>
 
       <!-- Search & Controls Bar -->
-      <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+      <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-3">
         <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-          <!-- Search Input -->
-          <div class="flex-1 max-w-md">
+          <!-- Real-Time Signals Search Input -->
+          <div class="flex-1 max-w-lg">
             <mat-form-field appearance="outline" class="w-full" subscriptSizing="dynamic">
+              <mat-label>Filtrar por nombre o categoría en tiempo real...</mat-label>
               <input
                 matInput
-                [formControl]="searchControl"
-                placeholder="Buscar por nombre, modelo o descripción..."
+                [value]="searchTerm()"
+                (input)="onSearchInput($event)"
+                placeholder="Ej. Audífonos, Tecnología, Café, Hogar..."
               />
-              <mat-icon matPrefix class="text-slate-400 mr-2">search</mat-icon>
-              @if (searchControl.value) {
-                <button mat-icon-button matSuffix (click)="searchControl.setValue('')">
-                  <mat-icon class="text-slate-400">close</mat-icon>
+              <mat-icon matPrefix class="text-indigo-600 mr-2">search</mat-icon>
+              @if (searchTerm()) {
+                <button
+                  type="button"
+                  mat-icon-button
+                  matSuffix
+                  (click)="clearSearch()"
+                  aria-label="Limpiar filtro"
+                >
+                  <mat-icon class="text-slate-400 hover:text-slate-600">close</mat-icon>
                 </button>
               }
             </mat-form-field>
@@ -114,7 +120,8 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
             <!-- Sort dropdown -->
             <div class="w-48">
               <mat-form-field appearance="outline" class="w-full" subscriptSizing="dynamic">
-                <mat-select [formControl]="sortControl">
+                <mat-label>Ordenar por</mat-label>
+                <mat-select [value]="sortBy()" (selectionChange)="onSortChange($event.value)">
                   <mat-option value="newest">Más recientes</mat-option>
                   <mat-option value="price_asc">Precio: Menor a Mayor</mat-option>
                   <mat-option value="price_desc">Precio: Mayor a Menor</mat-option>
@@ -149,6 +156,26 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
             </div>
           </div>
         </div>
+
+        <!-- Real-Time Metrics & Reset Action -->
+        <div class="flex items-center justify-between text-xs text-slate-500 pt-1 border-t border-slate-100">
+          <span>
+            Mostrando <strong class="text-indigo-600 font-bold">{{ filteredProducts().length }}</strong> de {{ totalCount() }} productos
+            @if (searchTerm()) {
+              <span> (coincidencia con "<strong>{{ searchTerm() }}</strong>")</span>
+            }
+          </span>
+          @if (searchTerm() || selectedCategory() !== 'all') {
+            <button
+              type="button"
+              (click)="resetFilters()"
+              class="text-indigo-600 font-semibold hover:text-indigo-800 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <mat-icon class="text-xs">restart_alt</mat-icon>
+              Limpiar filtros
+            </button>
+          }
+        </div>
       </div>
 
       <!-- Main Products View Area -->
@@ -177,6 +204,7 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
               <app-product-card
                 [product]="product"
                 (editClicked)="openProductDialog($event)"
+                (deleteClicked)="confirmDelete($event)"
               ></app-product-card>
             }
           </div>
@@ -289,29 +317,39 @@ export class ProductsList implements OnInit {
 
   readonly viewMode = signal<'grid' | 'table'>('grid');
   readonly selectedCategory = signal<string>('all');
-  readonly searchControl = new FormControl<string>('', { nonNullable: true });
-  readonly sortControl = new FormControl<string>('newest', { nonNullable: true });
+  readonly searchTerm = signal<string>('');
+  readonly sortBy = signal<string>('newest');
 
   readonly tableColumns = ['image', 'name', 'price', 'stock', 'actions'];
 
   readonly totalCount = computed(() => this.productsService.products().length);
 
+  /**
+   * Señal computada para filtrado en tiempo real reactivo y de alto rendimiento.
+   * Filtra por nombre o por categoría a medida que el usuario escribe.
+   */
   readonly filteredProducts = computed(() => {
     let list = this.productsService.products();
     const cat = this.selectedCategory();
-    const query = this.searchControl.value.toLowerCase().trim();
-    const sort = this.sortControl.value;
+    const query = this.searchTerm().toLowerCase().trim();
+    const sort = this.sortBy();
 
+    // 1. Filtrado por chip de categoría seleccionado
     if (cat !== 'all') {
       list = list.filter(p => p.categoryId === cat);
     }
 
+    // 2. Filtrado en tiempo real por NOMBRE o CATEGORÍA
     if (query) {
-      list = list.filter(
-        p => p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query)
-      );
+      list = list.filter(p => {
+        const matchName = p.name.toLowerCase().includes(query);
+        const matchCategory = (p.categoryName || '').toLowerCase().includes(query);
+        const matchDescription = (p.description || '').toLowerCase().includes(query);
+        return matchName || matchCategory || matchDescription;
+      });
     }
 
+    // 3. Ordenación en memoria
     const sorted = [...list];
     switch (sort) {
       case 'price_asc':
@@ -339,14 +377,27 @@ export class ProductsList implements OnInit {
     this.categoriesService.loadCategories().subscribe();
   }
 
+  onSearchInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.searchTerm.set(input.value);
+  }
+
+  clearSearch(): void {
+    this.searchTerm.set('');
+  }
+
+  onSortChange(value: string): void {
+    this.sortBy.set(value);
+  }
+
   selectCategory(catId: string): void {
     this.selectedCategory.set(catId);
   }
 
   resetFilters(): void {
     this.selectedCategory.set('all');
-    this.searchControl.setValue('');
-    this.sortControl.setValue('newest');
+    this.searchTerm.set('');
+    this.sortBy.set('newest');
   }
 
   openProductDialog(product?: Product): void {

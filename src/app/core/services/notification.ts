@@ -25,6 +25,15 @@ export class Notification {
     });
   }
 
+  warning(message: string, durationMs = 4000) {
+    this.snackBar.open(message, 'Aceptar', {
+      duration: durationMs,
+      horizontalPosition: 'right',
+      verticalPosition: 'bottom',
+      panelClass: ['bg-amber-600', 'text-white'],
+    });
+  }
+
   info(message: string, durationMs = 3000) {
     this.snackBar.open(message, 'OK', {
       duration: durationMs,

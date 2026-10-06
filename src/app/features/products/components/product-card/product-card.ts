@@ -91,6 +91,18 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
               </button>
             }
 
+            @if (auth.isAdmin()) {
+              <button
+                type="button"
+                mat-icon-button
+                class="text-slate-400 hover:text-rose-600"
+                (click)="deleteClicked.emit(product())"
+                matTooltip="Eliminar producto"
+              >
+                <mat-icon class="text-lg">delete</mat-icon>
+              </button>
+            }
+
             <button
               type="button"
               mat-flat-button
@@ -111,6 +123,7 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
 export class ProductCard {
   readonly product = input.required<Product>();
   readonly editClicked = output<Product>();
+  readonly deleteClicked = output<Product>();
 
   readonly cart = inject(Cart);
   readonly auth = inject(Auth);
