@@ -1,12 +1,19 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, tap, catchError, throwError, from, map } from 'rxjs';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { API_CONFIG } from '../../../core/config/api.config';
+import { Observable, from, map, catchError, of, throwError } from 'rxjs';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { FIREBASE_CONFIG } from '../../../core/config/firebase.config';
 import { ApiResponse, Product } from '../../../shared/models';
 import { Notification } from '../../../core/services/notification';
 import { Firebase } from '../../../core/services/firebase';
+import { INITIAL_PRODUCTS } from '../../../shared/data/initial-products';
 
 export interface ProductFilters {
   q?: string;
@@ -21,7 +28,6 @@ export interface ProductFilters {
   providedIn: 'root',
 })
 export class ProductService {
-  private readonly http = inject(HttpClient);
   private readonly notification = inject(Notification);
   private readonly firebase = inject(Firebase);
 
@@ -41,105 +47,121 @@ export class ProductService {
   readonly totalProducts = computed(() => this._products().length);
 
   /**
-   * Obtiene la lista de productos desde la API REST (Express)
-   * con sincronización y fallback directo a Cloud Firestore
+   * Obtiene la lista de productos conectándose directamente
+   * a la base de datos NoSQL Cloud Firestore
    */
   loadProducts(filters?: ProductFilters): Observable<ApiResponse<Product[]>> {
     this._loading.set(true);
     this._error.set(null);
 
-    let params = new HttpParams();
-    if (filters) {
-      if (filters.q) params = params.set('q', filters.q);
-      if (filters.categoryId && filters.categoryId !== 'all') {
-        params = params.set('categoryId', filters.categoryId);
-      }
-      if (filters.minPrice !== undefined) {
-        params = params.set('minPrice', filters.minPrice.toString());
-      }
-      if (filters.maxPrice !== undefined) {
-        params = params.set('maxPrice', filters.maxPrice.toString());
-      }
-      if (filters.sortBy) params = params.set('sortBy', filters.sortBy);
-      if (filters.activeOnly !== undefined) {
-        params = params.set('activeOnly', filters.activeOnly.toString());
-      }
-    }
-
-    const endpoint = API_CONFIG.endpoints.products || `${API_CONFIG.baseUrl}/products`;
-
-    return this.http.get<ApiResponse<Product[]>>(endpoint, { params }).pipe(
-      tap(res => {
+    return from(this.fetchProductsFromFirestore(filters)).pipe(
+      map(prods => {
         this._loading.set(false);
-        if (res.success && res.data) {
-          this._products.set(res.data);
-        }
+        this._products.set(prods);
+        return {
+          success: true,
+          data: prods,
+          total: prods.length,
+        };
       }),
       catchError(err => {
-        // Fallback resiliente: consultar directamente Cloud Firestore NoSQL
-        return from(this.loadDirectFromFirestore()).pipe(
-          map(prods => {
-            this._loading.set(false);
-            if (prods.length > 0) {
-              this.notification.info('Productos cargados directamente desde Cloud Firestore');
-            }
-            return {
-              success: true,
-              data: prods,
-              total: prods.length,
-            };
-          }),
-          catchError(() => {
-            this._loading.set(false);
-            const errMsg = err.error?.error || 'Error al cargar productos desde la API/Firebase';
-            this._error.set(errMsg);
-            this.notification.error(errMsg);
-            return throwError(() => err);
-          })
-        );
+        this._loading.set(false);
+        const errMsg = err?.message || 'Error al consultar Cloud Firestore';
+        this._error.set(errMsg);
+        this.notification.error(errMsg);
+        return of({
+          success: true,
+          data: INITIAL_PRODUCTS,
+          total: INITIAL_PRODUCTS.length,
+        });
       })
     );
   }
 
   /**
-   * Consulta directa a la colección 'products' en Cloud Firestore
+   * Consulta directa y filtrado sobre Cloud Firestore
    */
-  async loadDirectFromFirestore(): Promise<Product[]> {
-    this._loading.set(true);
-    this._error.set(null);
-    try {
-      const prods = await this.firebase.getFirestoreProducts();
-      if (prods && prods.length > 0) {
-        this._products.set(prods);
-      }
-      return prods || [];
-    } catch (err) {
-      console.error('[Firestore Direct Error]', err);
-      throw err;
-    } finally {
-      this._loading.set(false);
+  private async fetchProductsFromFirestore(filters?: ProductFilters): Promise<Product[]> {
+    const colRef = collection(this.firebase.firestore, FIREBASE_CONFIG.collections.products);
+    const snap = await getDocs(colRef);
+    let list: Product[] = [];
+
+    if (snap.empty) {
+      // Auto-inicialización si la colección estuviera vacía
+      list = [...INITIAL_PRODUCTS];
+    } else {
+      list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Product));
     }
+
+    if (filters) {
+      if (filters.activeOnly) {
+        list = list.filter(p => p.active);
+      }
+      if (filters.categoryId && filters.categoryId !== 'all') {
+        list = list.filter(p => p.categoryId === filters.categoryId);
+      }
+      if (filters.q) {
+        const term = filters.q.toLowerCase().trim();
+        list = list.filter(
+          p => p.name.toLowerCase().includes(term) || p.description.toLowerCase().includes(term)
+        );
+      }
+      if (filters.minPrice !== undefined) {
+        list = list.filter(p => p.price >= filters.minPrice!);
+      }
+      if (filters.maxPrice !== undefined) {
+        list = list.filter(p => p.price <= filters.maxPrice!);
+      }
+      if (filters.sortBy) {
+        switch (filters.sortBy) {
+          case 'price_asc':
+            list.sort((a, b) => a.price - b.price);
+            break;
+          case 'price_desc':
+            list.sort((a, b) => b.price - a.price);
+            break;
+          case 'name_asc':
+            list.sort((a, b) => a.name.localeCompare(b.name));
+            break;
+          case 'newest':
+            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            break;
+          case 'rating':
+            list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            break;
+        }
+      }
+    }
+
+    return list;
   }
 
   /**
-   * Obtiene un producto individual por ID
+   * Obtiene un producto individual por ID directamente desde Firestore
    */
   getProductById(id: string): Observable<ApiResponse<Product>> {
     this._loading.set(true);
     this._error.set(null);
 
-    const endpoint = `${API_CONFIG.endpoints.products}/${id}`;
-
-    return this.http.get<ApiResponse<Product>>(endpoint).pipe(
-      tap(res => {
+    return from(getDoc(doc(this.firebase.firestore, FIREBASE_CONFIG.collections.products, id))).pipe(
+      map(docSnap => {
         this._loading.set(false);
-        if (res.success && res.data) {
-          this._selectedProduct.set(res.data);
+        if (docSnap.exists()) {
+          const product = { id: docSnap.id, ...docSnap.data() } as Product;
+          this._selectedProduct.set(product);
+          return { success: true, data: product };
         }
+        // Fallback a memoria
+        const fallback = INITIAL_PRODUCTS.find(p => p.id === id);
+        if (fallback) {
+          this._selectedProduct.set(fallback);
+          return { success: true, data: fallback };
+        }
+        throw new Error('Producto no encontrado');
       }),
       catchError(err => {
         this._loading.set(false);
-        const errMsg = err.error?.error || 'No se pudo encontrar el producto solicitado';
+        const errMsg = err?.message || 'No se pudo encontrar el producto';
         this._error.set(errMsg);
         this.notification.error(errMsg);
         return throwError(() => err);
@@ -148,113 +170,105 @@ export class ProductService {
   }
 
   /**
-   * Crea un nuevo producto y lo sincroniza en Cloud Firestore
+   * Crea un producto directamente en Cloud Firestore
    */
   createProduct(data: Partial<Product>): Observable<ApiResponse<Product>> {
     this._loading.set(true);
-    const endpoint = API_CONFIG.endpoints.products;
+    const id = data.id || `prod-${Date.now()}`;
+    const newProduct: Product = {
+      id,
+      name: data.name || 'Nuevo Producto',
+      description: data.description || '',
+      price: data.price || 0,
+      stock: data.stock || 0,
+      imageUrl: data.imageUrl || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600',
+      categoryId: data.categoryId || 'cat-1',
+      categoryName: data.categoryName || 'General',
+      active: data.active ?? true,
+      rating: 5.0,
+      reviewsCount: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
-    return this.http.post<ApiResponse<Product>>(endpoint, data).pipe(
-      tap(async res => {
+    const docRef = doc(this.firebase.firestore, FIREBASE_CONFIG.collections.products, id);
+
+    return from(setDoc(docRef, { ...newProduct, firestoreTimestamp: serverTimestamp() })).pipe(
+      map(() => {
         this._loading.set(false);
-        if (res.success && res.data) {
-          const newProd = res.data;
-          this._products.update(list => [newProd, ...list]);
-
-          // Sincronizar en Cloud Firestore
-          try {
-            await setDoc(doc(this.firebase.firestore, FIREBASE_CONFIG.collections.products, newProd.id), newProd, { merge: true });
-          } catch (e) {
-            console.warn('[Firestore Sync Warning]', e);
-          }
-
-          this.notification.success('Producto creado y sincronizado en Firestore');
-        }
+        this._products.update(list => [newProduct, ...list]);
+        this.notification.success('Producto creado directamente en Cloud Firestore');
+        return { success: true, data: newProduct };
       }),
       catchError(err => {
         this._loading.set(false);
-        this.notification.error(err.error?.error || 'Error al crear el producto');
+        this.notification.error(err?.message || 'Error al crear producto en Firestore');
         return throwError(() => err);
       })
     );
   }
 
   /**
-   * Actualiza un producto existente en Express y Cloud Firestore
+   * Actualiza un producto directamente en Cloud Firestore
    */
   updateProduct(id: string, data: Partial<Product>): Observable<ApiResponse<Product>> {
     this._loading.set(true);
-    const endpoint = `${API_CONFIG.endpoints.products}/${id}`;
+    const docRef = doc(this.firebase.firestore, FIREBASE_CONFIG.collections.products, id);
+    const updates = {
+      ...data,
+      updatedAt: new Date().toISOString(),
+      firestoreUpdatedAt: serverTimestamp(),
+    };
 
-    return this.http.put<ApiResponse<Product>>(endpoint, data).pipe(
-      tap(async res => {
+    return from(setDoc(docRef, updates, { merge: true })).pipe(
+      map(() => {
         this._loading.set(false);
-        if (res.success && res.data) {
-          const updated = res.data;
-          this._products.update(list => list.map(p => (p.id === id ? updated : p)));
-          if (this._selectedProduct()?.id === id) {
-            this._selectedProduct.set(updated);
-          }
-
-          // Sincronizar en Cloud Firestore
-          try {
-            await setDoc(doc(this.firebase.firestore, FIREBASE_CONFIG.collections.products, id), updated, { merge: true });
-          } catch (e) {
-            console.warn('[Firestore Sync Warning]', e);
-          }
-
-          this.notification.success('Producto actualizado en Express y Firestore');
+        this._products.update(list =>
+          list.map(p => (p.id === id ? { ...p, ...data, updatedAt: updates.updatedAt } : p))
+        );
+        const updated = this._products().find(p => p.id === id);
+        if (this._selectedProduct()?.id === id && updated) {
+          this._selectedProduct.set(updated);
         }
+        this.notification.success('Producto actualizado en Cloud Firestore');
+        return { success: true, data: updated };
       }),
       catchError(err => {
         this._loading.set(false);
-        this.notification.error(err.error?.error || 'Error al actualizar el producto');
+        this.notification.error(err?.message || 'Error al actualizar producto en Firestore');
         return throwError(() => err);
       })
     );
   }
 
   /**
-   * Elimina un producto y lo retira de Express y Cloud Firestore
+   * Elimina un producto directamente de Cloud Firestore
    */
   deleteProduct(id: string): Observable<ApiResponse> {
     this._loading.set(true);
-    const endpoint = `${API_CONFIG.endpoints.products}/${id}`;
+    const docRef = doc(this.firebase.firestore, FIREBASE_CONFIG.collections.products, id);
 
-    return this.http.delete<ApiResponse>(endpoint).pipe(
-      tap(async res => {
+    return from(deleteDoc(docRef)).pipe(
+      map(() => {
         this._loading.set(false);
-        if (res.success) {
-          this._products.update(list => list.filter(p => p.id !== id));
-          if (this._selectedProduct()?.id === id) {
-            this._selectedProduct.set(null);
-          }
-
-          // Eliminar de Cloud Firestore
-          try {
-            await deleteDoc(doc(this.firebase.firestore, FIREBASE_CONFIG.collections.products, id));
-          } catch (e) {
-            console.warn('[Firestore Delete Warning]', e);
-          }
-
-          this.notification.success('Producto eliminado de la base de datos');
+        this._products.update(list => list.filter(p => p.id !== id));
+        if (this._selectedProduct()?.id === id) {
+          this._selectedProduct.set(null);
         }
+        this.notification.success('Producto eliminado de Cloud Firestore');
+        return { success: true, message: 'Producto eliminado correctamente' };
       }),
       catchError(err => {
         this._loading.set(false);
-        this.notification.error(err.error?.error || 'Error al eliminar el producto');
+        this.notification.error(err?.message || 'Error al eliminar producto en Firestore');
         return throwError(() => err);
       })
     );
   }
 
-  /**
-   * Limpia la selección activa de producto
-   */
   clearSelectedProduct(): void {
     this._selectedProduct.set(null);
   }
 }
 
-// Exportamos también el alias Products para compatibilidad con código existente
 export { ProductService as Products };

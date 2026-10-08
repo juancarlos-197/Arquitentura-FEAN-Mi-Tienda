@@ -1,8 +1,6 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap, catchError, throwError } from 'rxjs';
-import { API_CONFIG } from '../config/api.config';
+import { Observable, of } from 'rxjs';
 import { ApiResponse, AuthResponse, User, UserRole } from '../../shared/models';
 import { Notification } from './notification';
 import { Firebase } from './firebase';
@@ -14,7 +12,6 @@ const STORAGE_KEY_USER = 'fean_auth_user';
   providedIn: 'root',
 })
 export class Auth {
-  private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly notification = inject(Notification);
   private readonly firebaseService = inject(Firebase);
@@ -38,7 +35,6 @@ export class Auth {
       if (stored) {
         return JSON.parse(stored);
       }
-      // Default to demo admin for instant rich interaction
       const defaultUser: User = {
         id: 'user-admin',
         name: 'Carlos Mendoza (Admin)',
@@ -46,7 +42,7 @@ export class Auth {
         role: 'ADMIN',
         active: true,
         phone: '+34 611 223 344',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
         createdAt: '2026-01-01T08:00:00.000Z',
         updatedAt: '2026-01-01T08:00:00.000Z',
       };
@@ -68,47 +64,49 @@ export class Auth {
   }
 
   login(credentials: { email: string; password?: string }): Observable<ApiResponse<AuthResponse>> {
-    return this.http.post<ApiResponse<AuthResponse>>(API_CONFIG.endpoints.auth.login, credentials).pipe(
-      tap(res => {
-        if (res.success && res.data) {
-          this.setSession(res.data.token, res.data.user);
-          this.notification.success(`¡Bienvenido de nuevo, ${res.data.user.name}!`);
-        }
-      }),
-      catchError(err => {
-        const errorMsg = err.error?.error || 'Error al iniciar sesión';
-        this.notification.error(errorMsg);
-        return throwError(() => err);
-      })
-    );
+    const isAdmin = credentials.email.toLowerCase().includes('admin');
+    const isManager = credentials.email.toLowerCase().includes('manager');
+    const role: UserRole = isAdmin ? 'ADMIN' : (isManager ? 'MANAGER' : 'CUSTOMER');
+
+    const user: User = {
+      id: isAdmin ? 'user-admin' : `user-${Date.now()}`,
+      name: isAdmin ? 'Carlos Mendoza (Admin)' : (isManager ? 'Elena Rodríguez (Manager)' : 'Cliente Autenticado'),
+      email: credentials.email,
+      role,
+      active: true,
+      avatarUrl: isAdmin
+        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const token = `token-${user.id}`;
+    this.setSession(token, user);
+    this.notification.success(`¡Bienvenido/a, ${user.name}!`);
+    return of({ success: true, data: { user, token } });
   }
 
   register(data: { name: string; email: string; password?: string }): Observable<ApiResponse<AuthResponse>> {
-    return this.http.post<ApiResponse<AuthResponse>>(API_CONFIG.endpoints.auth.register, data).pipe(
-      tap(res => {
-        if (res.success && res.data) {
-          this.setSession(res.data.token, res.data.user);
-          this.notification.success('Cuenta registrada con éxito');
-        }
-      }),
-      catchError(err => {
-        const errorMsg = err.error?.error || 'Error al registrar usuario';
-        this.notification.error(errorMsg);
-        return throwError(() => err);
-      })
-    );
+    const user: User = {
+      id: `user-${Date.now()}`,
+      name: data.name,
+      email: data.email,
+      role: 'CUSTOMER',
+      active: true,
+      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const token = `token-${user.id}`;
+    this.setSession(token, user);
+    this.notification.success('Cuenta registrada con éxito');
+    return of({ success: true, data: { user, token } });
   }
 
   forgotPassword(email: string): Observable<ApiResponse> {
-    return this.http.post<ApiResponse>(API_CONFIG.endpoints.auth.forgotPassword, { email }).pipe(
-      tap(res => {
-        this.notification.info(res.message || 'Instrucciones enviadas');
-      }),
-      catchError(err => {
-        this.notification.error('Error al solicitar recuperación');
-        return throwError(() => err);
-      })
-    );
+    this.notification.info(`Instrucciones enviadas a ${email}`);
+    return of({ success: true, message: 'Instrucciones enviadas' });
   }
 
   async loginWithGoogle(): Promise<boolean> {
@@ -119,43 +117,69 @@ export class Auth {
     const user: User = {
       id: fireUser.uid,
       name: fireUser.displayName || 'Usuario Google',
-      email: fireUser.email || 'usuario@firebase.com',
-      role: fireUser.email === 'jalban.dacompsc@gmail.com' ? 'ADMIN' : 'CUSTOMER',
+      email: fireUser.email || '',
+      role: 'CUSTOMER',
       active: true,
-      avatarUrl: fireUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      avatarUrl: fireUser.photoURL || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     this.setSession(token, user);
-    this.router.navigate(['/products']);
     return true;
   }
 
-  logout(): void {
-    this._currentUser.set(null);
-    this._token.set(null);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY_TOKEN);
-      localStorage.removeItem(STORAGE_KEY_USER);
-    }
-    this.notification.info('Sesión cerrada correctamente');
-    this.router.navigate(['/auth/login']);
-  }
-
-  // Quick switch role / user helper for easy testing of multi-role permissions
-  switchUser(user: User): void {
-    const token = `fean_token_${user.id}`;
-    this.setSession(token, user);
-    this.notification.success(`Cambiado a perfil: ${user.name} (${user.role})`);
-  }
-
-  private setSession(token: string, user: User): void {
+  setSession(token: string, user: User): void {
     this._token.set(token);
     this._currentUser.set(user);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_TOKEN, token);
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+      try {
+        localStorage.setItem(STORAGE_KEY_TOKEN, token);
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+      } catch (err) {
+        console.error('Error al guardar sesión:', err);
+      }
     }
+  }
+
+  setUser(user: User): void {
+    this._currentUser.set(user);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+      } catch (err) {
+        console.error('Error al actualizar usuario:', err);
+      }
+    }
+  }
+
+  switchUser(user: User): void {
+    this.setUser(user);
+    const token = `fean_token_${user.id}`;
+    this._token.set(token);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY_TOKEN, token);
+      } catch (err) {
+        console.error('Error al cambiar token:', err);
+      }
+    }
+    this.notification.info(`Perfil cambiado a: ${user.name}`);
+  }
+
+  logout(): void {
+    this._token.set(null);
+    this._currentUser.set(null);
+    this.firebaseService.logout();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+        localStorage.removeItem(STORAGE_KEY_USER);
+      } catch (err) {
+        console.error('Error al cerrar sesión:', err);
+      }
+    }
+    this.notification.info('Sesión cerrada');
+    this.router.navigate(['/products']);
   }
 }

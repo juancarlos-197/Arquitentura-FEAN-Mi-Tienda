@@ -1,16 +1,50 @@
 import { inject, Injectable, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, tap, catchError, throwError } from 'rxjs';
-import { API_CONFIG } from '../../../core/config/api.config';
+import { Observable, from, map, catchError, of, throwError } from 'rxjs';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { FIREBASE_CONFIG } from '../../../core/config/firebase.config';
 import { ApiResponse, Order, OrderStatus } from '../../../shared/models';
 import { Notification } from '../../../core/services/notification';
+import { Firebase } from '../../../core/services/firebase';
+
+const INITIAL_ORDERS: Order[] = [
+  {
+    id: 'ORD-2026-001',
+    customerId: 'user-customer-1',
+    customerName: 'Javier Alban',
+    customerEmail: 'jalban.dacompsc@gmail.com',
+    items: [
+      {
+        productId: 'prod-1',
+        productName: 'Audífonos Noise-Cancelling Pro Apex',
+        productPrice: 249.99,
+        quantity: 1,
+        subtotal: 249.99,
+        imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600',
+      },
+    ],
+    total: 249.99,
+    status: 'DELIVERED',
+    shippingAddress: 'Av. Diagonal 450, 08006 Barcelona, España',
+    paymentMethod: 'Tarjeta de Crédito',
+    notes: 'Entregado en recepción con firma digital.',
+    createdAt: '2026-02-25T14:30:00.000Z',
+    updatedAt: '2026-02-27T18:00:00.000Z',
+  },
+];
 
 @Injectable({
   providedIn: 'root',
 })
 export class Orders {
-  private readonly http = inject(HttpClient);
   private readonly notification = inject(Notification);
+  private readonly firebase = inject(Firebase);
 
   private readonly _orders = signal<Order[]>([]);
   private readonly _selectedOrder = signal<Order | null>(null);
@@ -22,34 +56,54 @@ export class Orders {
 
   loadOrders(filters?: { customerId?: string; status?: string }): Observable<ApiResponse<Order[]>> {
     this._loading.set(true);
+    const colRef = collection(this.firebase.firestore, FIREBASE_CONFIG.collections.orders);
 
-    let params = new HttpParams();
-    if (filters?.customerId) params = params.set('customerId', filters.customerId);
-    if (filters?.status && filters.status !== 'all') params = params.set('status', filters.status);
-
-    return this.http.get<ApiResponse<Order[]>>(API_CONFIG.endpoints.orders, { params }).pipe(
-      tap(res => {
+    return from(getDocs(colRef)).pipe(
+      map(snap => {
         this._loading.set(false);
-        if (res.success && res.data) {
-          this._orders.set(res.data);
+        let list: Order[] = [];
+        if (snap.empty) {
+          list = [...INITIAL_ORDERS];
+        } else {
+          list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
         }
+
+        if (filters?.customerId) {
+          list = list.filter(o => o.customerId === filters.customerId);
+        }
+        if (filters?.status && filters.status !== 'all') {
+          list = list.filter(o => o.status === filters.status);
+        }
+
+        this._orders.set(list);
+        return { success: true, data: list, total: list.length };
       }),
-      catchError(err => {
+      catchError(() => {
         this._loading.set(false);
-        this.notification.error('Error al consultar pedidos');
-        return throwError(() => err);
+        this._orders.set(INITIAL_ORDERS);
+        return of({ success: true, data: INITIAL_ORDERS, total: INITIAL_ORDERS.length });
       })
     );
   }
 
   getOrderById(id: string): Observable<ApiResponse<Order>> {
     this._loading.set(true);
-    return this.http.get<ApiResponse<Order>>(`${API_CONFIG.endpoints.orders}/${id}`).pipe(
-      tap(res => {
+    const docRef = doc(this.firebase.firestore, FIREBASE_CONFIG.collections.orders, id);
+
+    return from(getDoc(docRef)).pipe(
+      map(snap => {
         this._loading.set(false);
-        if (res.success && res.data) {
-          this._selectedOrder.set(res.data);
+        if (snap.exists()) {
+          const order = { id: snap.id, ...snap.data() } as Order;
+          this._selectedOrder.set(order);
+          return { success: true, data: order };
         }
+        const fallback = INITIAL_ORDERS.find(o => o.id === id);
+        if (fallback) {
+          this._selectedOrder.set(fallback);
+          return { success: true, data: fallback };
+        }
+        throw new Error('Pedido no encontrado');
       }),
       catchError(err => {
         this._loading.set(false);
@@ -59,34 +113,65 @@ export class Orders {
     );
   }
 
-  createOrder(data: Partial<Order>): Observable<ApiResponse<Order>> {
-    return this.http.post<ApiResponse<Order>>(API_CONFIG.endpoints.orders, data).pipe(
-      tap(res => {
-        if (res.success && res.data) {
-          this._orders.update(list => [res.data!, ...list]);
-          this.notification.success(`¡Pedido #${res.data.id} creado con éxito en Firebase!`);
-        }
+  createOrder(orderData: Partial<Order>): Observable<ApiResponse<Order>> {
+    this._loading.set(true);
+    const id = orderData.id || `ORD-${Date.now()}`;
+    const items = orderData.items || [];
+    const total = orderData.total ?? items.reduce((acc, item) => acc + (item.subtotal || item.productPrice * item.quantity), 0);
+
+    const newOrder: Order = {
+      id,
+      customerId: orderData.customerId || 'user-customer-1',
+      customerName: orderData.customerName || 'Cliente',
+      customerEmail: orderData.customerEmail || 'cliente@mitienda.com',
+      items,
+      total,
+      status: orderData.status || 'PENDING',
+      shippingAddress: orderData.shippingAddress || '',
+      paymentMethod: orderData.paymentMethod || 'Tarjeta',
+      notes: orderData.notes || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const docRef = doc(this.firebase.firestore, FIREBASE_CONFIG.collections.orders, id);
+
+    return from(setDoc(docRef, { ...newOrder, timestamp: serverTimestamp() })).pipe(
+      map(() => {
+        this._loading.set(false);
+        this._orders.update(list => [newOrder, ...list]);
+        this.notification.success(`Pedido ${id} registrado en Cloud Firestore`);
+        return { success: true, data: newOrder };
       }),
       catchError(err => {
-        this.notification.error(err.error?.error || 'No se pudo procesar el pedido');
+        this._loading.set(false);
+        this.notification.error(err?.message || 'Error al procesar el pedido');
         return throwError(() => err);
       })
     );
   }
 
   updateOrderStatus(id: string, status: OrderStatus): Observable<ApiResponse<Order>> {
-    return this.http.put<ApiResponse<Order>>(`${API_CONFIG.endpoints.orders}/${id}/status`, { status }).pipe(
-      tap(res => {
-        if (res.success && res.data) {
-          this._orders.update(list => list.map(o => (o.id === id ? res.data! : o)));
-          if (this._selectedOrder()?.id === id) {
-            this._selectedOrder.set(res.data);
-          }
-          this.notification.success(`Estado actualizado a ${status}`);
+    this._loading.set(true);
+    const docRef = doc(this.firebase.firestore, FIREBASE_CONFIG.collections.orders, id);
+    const updates = { status, updatedAt: new Date().toISOString() };
+
+    return from(setDoc(docRef, updates, { merge: true })).pipe(
+      map(() => {
+        this._loading.set(false);
+        this._orders.update(list =>
+          list.map(o => (o.id === id ? { ...o, status, updatedAt: updates.updatedAt } : o))
+        );
+        const updated = this._orders().find(o => o.id === id);
+        if (this._selectedOrder()?.id === id && updated) {
+          this._selectedOrder.set(updated);
         }
+        this.notification.success(`Estado actualizado a ${status} en Firestore`);
+        return { success: true, data: updated };
       }),
       catchError(err => {
-        this.notification.error(err.error?.error || 'Error al actualizar el estado del pedido');
+        this._loading.set(false);
+        this.notification.error(err?.message || 'No se pudo actualizar el pedido');
         return throwError(() => err);
       })
     );

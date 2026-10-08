@@ -5,24 +5,20 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import {join} from 'node:path';
-import { apiRouter } from './server/routes';
+import { join } from 'node:path';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-// Body parsers for Express REST API
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// FEAN Architecture REST API routes
-app.use('/api', apiRouter);
-
 /**
- * Serve static files from /browser
+ * Servidor Angular SSR exclusivo (sin servidor API REST intermediario).
+ * Todas las operaciones de base de datos se conectan de forma nativa
+ * a Cloud Firestore NoSQL y Firebase Authentication.
  */
+
+// Archivos estáticos del bundle de Angular
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',
@@ -31,9 +27,7 @@ app.use(
   }),
 );
 
-/**
- * Handle all other requests by rendering the Angular application.
- */
+// Manejador Angular SSR para todas las rutas de la aplicación
 app.use((req, res, next) => {
   angularApp
     .handle(req)
@@ -43,22 +37,11 @@ app.use((req, res, next) => {
     .catch(next);
 });
 
-/**
- * Start the server if this module is the main entry point, or it is ran via PM2.
- * The server listens on the port defined by the `PORT` environment variable, or defaults to 4000.
- */
 if (isMainModule(import.meta.url) || process.env['pm_id']) {
-  const port = process.env['PORT'] || 4000;
-  app.listen(port, (error) => {
-    if (error) {
-      throw error;
-    }
-
-    console.log(`Node Express server listening on http://localhost:${port}`);
+  const port = Number(process.env['PORT'] || 3000);
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`Angular App listening on http://0.0.0.0:${port}`);
   });
 }
 
-/**
- * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
- */
 export const reqHandler = createNodeRequestHandler(app);
